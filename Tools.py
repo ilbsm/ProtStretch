@@ -1,5 +1,3 @@
-from typing import Union, Iterable
-
 import pandas as pd
 from io import StringIO
 import numpy as np
@@ -11,6 +9,9 @@ import matplotlib.colors as mcolors
 from scipy.integrate import simps
 import os
 from scipy.special import erf
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+from random import uniform
 
 
 def load_data(path, inverse=False):
@@ -28,8 +29,8 @@ def load_data(path, inverse=False):
         data = pd.read_table("data/total.txt", delim_whitespace=True, header=0)
         return data
 
-    if path == os.path.join(os.path.dirname(__file__), 'data_exp/total.txt'):
-        data = pd.read_table("data_exp/total.txt", delim_whitespace=True, header=0)
+    if path == os.path.join(os.path.dirname(__file__), 'data_exp_tm1570/total.txt'):
+        data = pd.read_table("data_exp_tm1570/total.txt", delim_whitespace=True, header=0)
         return data
 
     with open(path, 'r') as file:
@@ -43,8 +44,8 @@ def load_data(path, inverse=False):
         data['F'] = data['F'] * (-1)
         data = data.loc[data['F'] > 0.1]
     data['d'] = data['d'] * 0.1
+    data['F'] = data['F'] * 10
     data = data.reset_index(drop=True)
-
     return data
 
 
@@ -343,10 +344,8 @@ def decompose_histogram(hist_values, significance=0.03, states=None, bandwidth=0
     estimator = np.linspace(min(hist_values), max(hist_values), 1001)
     kde_est = np.exp(kde.score_samples(estimator.reshape(-1, 1)))
 
-    if 'compare' in kwargs.keys():
-        compare = kwargs['compare']
-        guesses = pd.DataFrame({'heights': compare.histo_data['heights'], 'means': compare.histo_data['means'],
-                                'widths': compare.histo_data['widths']})
+    if 'guess' in kwargs.keys():
+        guesses = kwargs['guess']
 
     else:
 
@@ -396,10 +395,10 @@ def decompose_histogram(hist_values, significance=0.03, states=None, bandwidth=0
                                'widths': np.array([abs(round(popt[k + 2], 3)) for k in range(0, len(popt), 3)])})
     parameters = parameters.sort_values(by=['means'])
 
-    for index, row in parameters.iterrows():
-        if row['heights'] < 0.009:
-            parameters.drop([index], inplace=True)
-            parameters.reset_index(drop=True, inplace=True)
+    # for index, row in parameters.iterrows():
+    #     if row['heights'] < 0.012:
+    #         parameters.drop([index], inplace=True)
+    #         parameters.reset_index(drop=True, inplace=True)
 
     return parameters
 
@@ -427,7 +426,7 @@ def get_color(index):
     return colors[index]
 
 
-def work(data, begs, ends):
+def work(data, begs, ends, inverse=False):
     """Calculating area under the curve; direct method.
 
     :param data:
@@ -450,8 +449,13 @@ def work(data, begs, ends):
             area.append(np.NaN)
             continue
         for i in range(len(cut_data) - 1):
-            dx = cut_data['d'].at[i + 1] - cut_data['d'].at[i]
-            F = (cut_data['F'].at[i + 1] + cut_data['F'].at[i]) / 2
+            if inverse:
+                F = (cut_data['F'].at[-i] + cut_data['F'].at[-i - 1]) / 2
+                dx = cut_data['d'].at[-i] - cut_data['d'].at[-i - 1]
+            else:
+                F = (cut_data['F'].at[i + 1] + cut_data['F'].at[i]) / 2
+                dx = cut_data['d'].at[i + 1] - cut_data['d'].at[i]
+
             work_ = work_ + F * dx
 
         work_ = round(work_, 3)
@@ -480,7 +484,7 @@ def simpson(data, begs, ends):
         cut_data = data.loc[(data['d'] >= beg_item) & (data['d'] <= end_item)]
         cut_data = cut_data.reset_index(drop=True)
         if cut_data.empty:
-            area.append(np.NaN)
+            area.append(uniform(beg_item, end_item))
             continue
         area.append(round(simps(cut_data['F'].to_numpy(), cut_data['d'].to_numpy()), 3))
 
@@ -490,18 +494,22 @@ def simpson(data, begs, ends):
 def dhs_feat_cusp(force, x, t0, g):
     if 1 - 0.5 * force.max() * x / g < 0 or t0 < 0:
         return np.array([999 for _ in range(len(force))])
-    return np.log(t0) - x * force - np.log(1 - 0.5 * force * x / g) + ((0.5 * force * x) ** 2) / g
-    # return t0 * np.exp(- x * force) * ((1 - 0.5 * force * x / g) + ((0.5 * force * x) ** 2) / g)
+    return np.log(t0) + 1/2 * np.log(1 - force * x / (2 * g)) - g/0.5 * (1 - (1 - force * x / (2 * g))**2)
+    # return np.log(t0) + 1 / 2 * np.log(1 - force * x / (2 * g)) - 0.5 * g * (1 - (1 - force * x / (2 * g)) ** 2)
+    # return np.log(t0) - x * force / 4.114 - np.log(1 - 0.5 * force * x / g) + ((0.5 * force * x) ** 2) / g
 
 
 def dhs_feat_linear_cubic(force, x, t0, g):
-    return t0 / (1 - 2 * x / g * force / 3) ** (1 / 2) * np.exp(-g * (1 - (1 - 2 * x / g * force / 3) ** (3 / 2)))
+    return np.log(t0 / (1 - 2 * x / g * force / 3) ** (-1 / 2) * np.exp(-g / 0.5 * (1 - (1 - 2 * x / g * force / 3) **
+                                                                                      (3 /
+                                                                                       2))))
 
 
 def dhs_feat_bell(force, x, t0):
     if t0 < 0:
         return np.array([999 for _ in range(len(force))])
-    return np.log(t0) - x * force
+    return np.log(t0) - x * force / 0.5
+    # 4.114
     # return t0 * np.exp(- x * force)
 
 
@@ -509,11 +517,20 @@ def integrate_gauss(force, mean, width):
     return 0.5 * (1 - erf((force - mean) / (np.sqrt(width * 2))))
 
 
-def loading_force(k_s=0.003):
-    speed = 0.001
+def loading_force(force, p_linker=0.16, l_linker=350, speed=500, k_spring=0.3):
+    print(p_linker, l_linker)
+    # speed = 0.001
     # speed = 500
-    factor = 1 / k_s
-    return speed / factor
+    # k = 0.003 ??
+    if (p_linker == 0) and (l_linker == 0):
+        factor = 1 / k_spring
+        return speed / factor
+
+    dna_part = (2 * (l_linker / p_linker) * (1 + force / p_linker)) / (
+            3 + 5 * force / p_linker + 8 * (force / p_linker) ** (5 / 2))
+    factor = dna_part + 1 / k_spring
+
+    return speed * factor
 
 
 def get_d_dna(p_dna, l_dna, k_dna, f_space):
@@ -531,7 +548,6 @@ def read_dataframe(input_data, cases=None, columns=None):
         data = input_data.iloc[:, columns]
         data.columns = ['d', 'F']
         data = data.loc[data['F'] > 0.1]
-        # data['d'] = data['d'] * 0.1
         data = data.reset_index(drop=True)
         return data
     elif columns and not all([isinstance(c, int) for c in columns]):
@@ -547,3 +563,120 @@ def read_dataframe(input_data, cases=None, columns=None):
 def read_excel(input_data, cases, columns):
     data = pd.read_excel(input_data)
     return read_dataframe(data, cases=cases, columns=columns)
+
+
+def dudko_hummer_szabo(rupture_table, states_rup):
+    fig = plt.figure(figsize=(5, 5), dpi=100)
+    results = {'x': [], 't0': [], 'g': []}
+    for ind, row in rupture_table[['heights', 'means', 'widths']][:-1].iterrows():
+        f_space = np.linspace(min(list(states_rup.values())[ind]), row['means'], 1000)
+        height, mean, width = tuple(row.to_numpy())
+        # sym: speed = 0.0001, k = 0.3 reszta 0
+
+        dhs_data = pd.DataFrame({'forces': f_space,
+                                 # 'force_load': loading_force(f_space),
+                                 'force_load': loading_force(f_space, p_linker=0, l_linker=0, speed=0.0001,
+                                                             k_spring=0.3), # symulacje
+                                 'probability': norm.pdf(f_space, mean, width),
+                                 'nominator': integrate_gauss(f_space, mean, width)})
+
+        dhs_data['denominator'] = dhs_data['probability'] * dhs_data['force_load']
+        # dhs_data = dhs_data[dhs_data['denominator'] > 0.1]
+        dhs_data['lifetime'] = dhs_data['nominator'] / dhs_data['denominator']
+        # print(dhs_data)
+#         coefficients = {}
+#         # sym init lifetime 10^15 init x zawsze 1
+#         init_lifetime = 5
+#         init_x = 1
+
+#         # v = 1
+#         p0 = (init_x, init_lifetime)
+        # popt_b, pcov_b = curve_fit(dhs_feat_bell, dhs_data['forces'], np.log(dhs_data['lifetime']), p0=p0)
+        # print(popt_b, pcov_b)
+        # plt.plot(dhs_data['forces'], np.log(dhs_data['lifetime']))
+        # plt.show()
+        # coefficients['bell'] = {'x': popt_b[0], 't0': popt_b[1], 'g': np.NaN}  # 'covariance': pcov}
+
+        # v = 1/2
+        # p0 = (coefficients['bell']['x'], coefficients['bell']['t0'])
+
+        #tm15 exp
+
+#         p0 = (1, 50, 30)
+#         bounds = ([0.1, 0.1, 10], [4, 1000, 250])
+        # lc exp
+        # p0 = (0.75, 50, 25)
+        # bounds = ([0.1, 0.5, 10], [4, 1000, 200])
+        # cusp exp
+        # p0=
+        # linear cubic theory
+        # p0 = (0.5, 10.05 ** 13, 30)
+        # bounds = ([0.1, 10 ** 11, 5], [1.5, 3*10 ** 15, 100])
+        # cusp theory
+        # p0 = [(1.5, 2.8 * 10 ** 15, 30), (0.62, 1.5 * 10 ** 14, 63), (0.4, 5.3 * 10 ** 14, 37),
+        #       (0.4, 1.4 * 10 ** 15, 49)]
+        # bounds = [([1.3, 10 ** 15, 25], [1.6, 3 * 10 ** 15, 35]), ([0.5, 10 ** 14, 60], [0.7, 1.8 * 10 ** 14, 70]),
+        #           ([0.2, 5 * 10 ** 14, 30], [0.5, 6 * 10 ** 14, 40]),
+        #           ([0.2, 1 * 10 ** 15, 40], [0.5, 2 * 10 ** 15, 55])]
+        # p0 = (1, 10 ** 13, 50)
+        # bounds = ([0.2, 10 ** 11, 30], [2, 1.5*10 ** 15, 70])
+        # bounds = ([0.2, 10 ** 13, 20], [5, 10 ** 16, 80])
+#         print("FORCES")
+
+#         with pd.option_context('display.max_rows', None, 'display.max_columns',
+#                                None):  # more options can be specified also
+#             print(dhs_data['forces'])
+
+#         with pd.option_context('display.max_rows', None, 'display.max_columns',
+#                                None):  # more options can be specified also
+#             print(dhs_data['lifetime'])
+
+    #     try:
+    #         popt, pcov = curve_fit(dhs_feat_linear_cubic, dhs_data['forces'], np.log(dhs_data['lifetime']), p0=p0,
+    #                                bounds=bounds)
+    #         print(popt, pcov)
+    #         # popt, pcov = curve_fit(dhs_feat_cusp, dhs_data['forces'], np.log(dhs_data['lifetime']), p0=p0,
+    #         #                        bounds=bounds)
+    #         coefficients['lc'] = {'x': popt[0], 't0': popt[1], 'g': popt[2]}  # , 'covariance': pcov}
+    #         # print(coefficients['linear_cubic'])
+    #         print('xd')
+    #
+    #     except RuntimeError:
+    #         result = None
+    #
+    #
+    #         # plt.plot(f_space, dhs_feat_cusp(f_space, coefficients['cusp']['x'], coefficients['cusp']['t0'],
+    #         #                                 coefficients['cusp']['g']), color='black')
+    #     results['x'].append(coefficients['lc']['x'])
+    #     results['t0'].append(coefficients['lc']['t0'])
+    #     results['g'].append(coefficients['lc']['g'])
+    #
+    #     #label = 'F = ' + str(round(row['means'], 3)) + ' pN'
+    #     label = 'state ' + str(ind+1)
+    #
+    #     plt.plot(dhs_data['forces'], np.log(dhs_data['lifetime']), color=get_color(ind), label=label)
+    #     # plt.plot(f_space, dhs_feat_linear_cubic(f_space, popt_b[0], popt_b[1],
+    #     #                                 ), color='black', ls='-.')
+    #     plt.plot(f_space, dhs_feat_linear_cubic(f_space, popt[0], popt[1], popt[2]), color='black', ls='-.')
+    #
+    # plt.title('Dudko-Hummer-Szabo lifetimes')
+    # # plt.xlabel(r'Rupture force [$\frac{\epsilon}{nm}$]')
+    # plt.xlabel('Rupture force [pN]')
+    # plt.ylabel('log(state lifetime)')
+    # plt.legend(fontsize='small')
+    # plt.savefig("Images/dudko.png")
+    #
+    # dhs = pd.DataFrame.from_dict(results)
+
+    return None # dhs
+
+
+def load_data_new(path):
+    data = pd.read_csv(path, names=["d", "fold", "F"], delim_whitespace=True)
+    print(data)
+    data = data.loc[data['F'] > 0]
+    data['d'] = data['d']
+    data = data.reset_index(drop=True)
+    # data['d'] = data['d'] - min(data['d'])
+    # print(data)
+    return data
