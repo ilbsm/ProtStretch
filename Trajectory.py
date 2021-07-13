@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import os
 from pathlib import Path
+import math
 
 
 class Trajectory:
@@ -41,6 +42,8 @@ class Trajectory:
 
 
     """
+    
+    DIRNAME = "data_3dcm/"
 
     def __init__(self, filename: str, case: int, bond_length: float, residues: int, initial_guess: list,
                  bounds: tuple, **kwargs) -> object:
@@ -71,7 +74,7 @@ class Trajectory:
 
         """
 
-        self._path = os.path.join(os.path.dirname(__file__), "data_exp/", filename)
+        self._path = os.path.join(os.path.dirname(__file__), self.DIRNAME, filename)
         self._case = case
 
         self.bond_length = bond_length
@@ -80,13 +83,41 @@ class Trajectory:
         self.bounds = bounds
 
         if self._path.endswith(".afm"):
+            # self._data = copy.deepcopy(load_data_new(self._path))
+            # trimmed_data = self._data["d"] - get_d_dna(kwargs["p_dna"], kwargs["l_dna"], kwargs["k_dna"], self._data[
+            #     "F"])
+            # df = pd.DataFrame({'calosc': self._data["d"], 'F': self._data['F'], 'dna': get_d_dna(kwargs["p_dna"],
+            #                                                                kwargs["l_dna"],
+            #                                                           kwargs["k_dna"], self._data[
+            #     "F"]), 'roznica': trimmed_data})
+            # # plt.plot(df.index.values.tolist(), df["roznica"])
+            # # plt.show()
+            # df.to_csv('tabelka.txt', sep=' ', mode='w')
+            # # with pd.option_context('display.max_rows', None, 'display.max_columns',
+            # #                        None):  # more options can be specified also
+            # #     print(get_d_dna(kwargs["p_dna"], kwargs["l_dna"], kwargs["k_dna"], self._data[
+            # #     "F"]))
+            #
+            # # plt.plot(get_d_dna(kwargs["p_dna"], kwargs["l_dna"], kwargs["k_dna"], self._data[
+            # #     "F"]), self._data['F'])
+            # # plt.show()
+            # self._data["d"] = copy.deepcopy(trimmed_data)
+            # # # self._data = self._data.loc[(self._data['F'] > 3) & (self._data['d'] > 0)]
+            # plt.plot(self._data['d'], self._data['F'])
+            # plt.show()
+
+            # self._data = copy.deepcopy(load_data_new(self._path))
+
+            # odkom
             self._data = copy.deepcopy(load_data(self._path))
-            file = Path(os.path.join(os.path.dirname(__file__), "data/", filename[:4] + "_inverse.afm"))
+            file = Path(os.path.join(os.path.dirname(__file__), self.DIRNAME, filename[:4] + "_inverse.afm"))
 
             if file.is_file():
+                print('tu')
                 self._data_inverse = copy.deepcopy(load_data(file, inverse=True))
-        elif filename == "total_exp.txt":
+        elif filename == "total.txt":
             self._data = pd.read_table(self._path, delim_whitespace=True, header=0)
+
         else:
             self._data = copy.deepcopy(read_excel(self._path, None, [5 * (case - 1), 5 * case - 4]))
             self._data_inverse = copy.deepcopy(read_excel(self._path, None, [5 * (case - 1) + 2, 5 * case - 2]))
@@ -109,6 +140,8 @@ class Trajectory:
             self.k = kwargs["k"]
 
         self._smooth_data = copy.deepcopy(smooth_data(self._data))
+        if hasattr(self, "_data_inverse"):
+            self._smooth_data_inverse = copy.deepcopy(smooth_data(self._data_inverse))
         self._histo_data = self._find_peaks()
         #
         # if "p" in kwargs:
@@ -154,7 +187,8 @@ class Trajectory:
 
         """
 
-        l_space = np.linspace(0, self._data['L'].max() + 20, 1001)
+        print(self._histo_data)
+        l_space = np.linspace(0, self._data['L'].max() + 20, 1001) # + 20
         position.hist(self._data['L'], bins=4 * int(100), range=[0, self._histo_data['means'].max() + 20],
                       density=True, alpha=0.5)
         for index, row in self._histo_data[['means', 'widths', 'heights']].iterrows():
@@ -167,7 +201,7 @@ class Trajectory:
 
         position.set_title('Contour length histogram')
         position.set_xlabel('Extension [nm]')
-        position.set_ylabel('Counts')
+        position.set_ylabel('Probability')
         position.legend(fontsize='small')
         position.set_xlim(0, self._histo_data['means'].max() + 20)
 
@@ -202,11 +236,11 @@ class Trajectory:
         self.plot_contour_length_histo(position=ax[0])
         self.plot_fd(position=ax[1])
 
-        for i in range(len(self.histo_data)):
-            ax[1].axvline(x=self.histo_data['begs'].iloc[i], color='gray')
-            if i == len(self.histo_data) - 1:
-                ax[1].axvline(x=self.histo_data['ends'].iloc[i], color='gray')
-                break
+        # for i in range(len(self.histo_data)):
+        #     ax[1].axvline(x=self.histo_data['begs'].iloc[i], color='red', ls='--')
+        #     if i == len(self.histo_data) - 1:
+        #         ax[1].axvline(x=self.histo_data['ends'].iloc[i] + 2, color='red', ls='--', label='state boundary')
+        #         break
 
         plt.tight_layout()
 
@@ -223,6 +257,7 @@ class Trajectory:
         plt.savefig(results_dir + sample_file_name)
         print('saved as', os.path.join(results_dir, sample_file_name))
         plt.close()
+        # plt.show()
 
     def _to_minimize(self, x, last_range):
         """
@@ -245,7 +280,7 @@ class Trajectory:
         """
 
         extremas = argrelextrema(self._smooth_data[self._smooth_data['d'] < self._smooth_data['d'].max() - 3][
-                                        'F'].to_numpy(), np.less)[0]
+                                     'F'].to_numpy(), np.less)[0]
         local_minimum = self._smooth_data.loc[extremas[-1], 'd']
         end = self._smooth_data['d'].max()
         data_range = self._data[self._data['d'].between(local_minimum + 1, end - 1)]
@@ -276,7 +311,11 @@ class Trajectory:
         self._histo_data['work-s'] = simpson(self._smooth_data, self._histo_data['begs'], self._histo_data['ends'])
 
         if hasattr(self, "_data_inverse"):
-            self._histo_data['work_i'] = work(self._data_inverse, self._histo_data['begs'], self._histo_data['ends'])
+            # self._histo_data['work-i'] = work(self._data_inverse, self._histo_data['begs'], self._histo_data['ends'])
+            self._histo_data['work-i'] = simpson(self._smooth_data_inverse, self._histo_data['begs'],
+                                                 self._histo_data['ends'])
+
+        print(self._histo_data)
 
     def rupture_forces(self):
 
