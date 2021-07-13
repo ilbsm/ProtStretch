@@ -7,9 +7,21 @@ class Theory(Trajectory):
     def __init__(self, filename, case, **kwargs):
 
         bond_length = 0.38
-        residues = 240
-        initial_guess = [0.7, 0.005]
-        bounds = ((0.3, 0.8), (0.0009, 0.009))
+        # residues = 240 #trmd
+        residues = 188 #tm15
+        initial_guess = [4, 9.67e-05]
+        bounds = ((3, 5), (0.00001, 0.001))
+        
+        # określ słownik z parametrami pików na histogramie CL
+
+        # self._peaks = pd.DataFrame({'heights': [0.1, 0.1, 0.1, 0.1, 0.1], 'means': [7.5, 31, 46, 77, 90],
+        #                             'widths': [1, 1, 1, 1, 1]}) # TRMD.PDB
+        # self._peaks = pd.DataFrame({'heights': [0.1, 0.1, 0.1, 0.1], 'means': [5, 20, 57, 70],
+        #                                                          'widths': [1, 1, 1, 1]}) # tmx2
+        self._peaks = pd.DataFrame({'heights': [0.1, 0.1, 0.1, 0.1, 0.2], 'means': [5, 16, 22, 57, 70],
+                                    'widths': [1, 1, 1, 1, 1]})  # 3dcm
+        # self._peaks = pd.DataFrame({'heights': [0.1, 0.1, 0.1, 0.1, 0.1], 'means': [7.5, 31, 46, 77, 90],
+        #                             'widths': [1, 1, 1, 1, 1]}) # 5wyr
 
         super().__init__(filename, case, bond_length, residues, initial_guess, bounds, **kwargs)
 
@@ -36,7 +48,7 @@ class Theory(Trajectory):
 
         L = find_contour_lengths(self._data, self.p, self.k)
         self._data["L"] = L
-        histo_data = decompose_histogram(self._data["L"])
+        histo_data = decompose_histogram(self._data["L"], guess=self._peaks)
 
         return histo_data
 
@@ -57,7 +69,7 @@ class Theory(Trajectory):
         ends = []
 
         for mean in self.histo_data['means']:
-            cut = invert_wlc(12, self.p, self.k) * mean
+            cut = invert_wlc(80, self.p, self.k) * mean
             bound = self._smooth_data.iloc[(self._smooth_data['d'] - cut).abs().argsort()[:1]]['d'].to_list()[0]
             data_near = self._smooth_data.loc[self._smooth_data['F']
                                               == self._smooth_data.loc[abs(self._smooth_data['d'] - bound)
@@ -95,10 +107,17 @@ class Theory(Trajectory):
 
     def plot_fd(self, position):
 
+        # fig = plt.figure(dpi = 200, figsize = (5, 5))
+        # plt.plot(self._data.sort_values(by='d')['d'], self._data.sort_values(by='d')['F'])
+        # plt.title('Examplary stretching curve')
+        # plt.xlabel('Extension')
+        # plt.ylabel('Force')
+        # plt.show()
+
         if hasattr(self, "_data_inverse"):
             position.plot(self._data_inverse.sort_values(by='d')["d"], self._data_inverse.sort_values(by='d')['F'],
-                          color=mcolors.CSS4_COLORS['lightsteelblue'])
-        position.plot(self._data.sort_values(by='d')['d'], self._data.sort_values(by='d')['F'])
+                          color=mcolors.CSS4_COLORS['lightsteelblue'],  label='Refolding')
+        position.plot(self._data.sort_values(by='d')['d'], self._data.sort_values(by='d')['F'], label='Folding')
         position.plot(self._smooth_data['d'], self._smooth_data['F'], color=mcolors.CSS4_COLORS['pink'])
         index = 0
         for mean in self.histo_data['means']:
@@ -111,9 +130,10 @@ class Theory(Trajectory):
             position.plot(d_space, y_fit, ls='--', linewidth=1, label=label, color=get_color(index))
             index += 1
 
-        position.set_ylim(0, 12)
+        position.set_ylim(0, 120)
         position.set_xlim(min(self._data['d']), max(self._data['d']))
-        position.set_title('Trace fits')
+        position.set_title('F(d) curve for folding and refolding of 3DCM')
         position.set_xlabel('Extension [nm]')
-        position.set_ylabel('Force [pN]')
+        position.set_ylabel(r'Force [$\frac{\epsilon}{nm}$]')
         position.legend(fontsize='small')
+
