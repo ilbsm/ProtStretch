@@ -10,8 +10,18 @@ class Experiment(Trajectory):
 
         bond_length = 0.365
         residues = 226
-        initial_guess = [5, 0]
-        bounds = ((4.8, 5.2), (0, 0))
+        # residues = 1288
+        # residues = 188-14
+        # initial_guess = [5, 0]
+        # bounds = ((4.8, 5.2), (0, 0))
+        initial_guess = [3, 0.001]
+        bounds = ((1, 5), (0.0001, 0.003))
+        # initial_guess = [4, 0]
+        # bounds = ((3, 7), (0, 0))
+        # self._peaks = pd.DataFrame({'heights': [0.1, 0.1, 0.1, 0.1], 'means': [18, 27.5, 52, 67], 'widths': [1, 1, 1,
+        #                                                                                                     1]}) #tm15
+        self._peaks = pd.DataFrame({'heights': [0.1, 0.1, 0.1], 'means': [32, 45, 81], 'widths': [1, 1, 1]}) #trmd
+        # self._peaks = pd.DataFrame({'heights': [0.1, 0.1], 'means': [410, 480], 'widths': [10, 10]})
 
         super().__init__(filename, case, bond_length, residues, initial_guess, bounds, **kwargs)
 
@@ -25,26 +35,24 @@ class Experiment(Trajectory):
         with open(results_dir + "p_k_results_all.txt") as myfile:
 
             if ("trace" + str(self._case)) in myfile.read():
+
                 csv_data = pd.read_table(results_dir + "p_k_results_all.txt", delim_whitespace=True, header=0)
                 self.p = csv_data.loc[csv_data["trace"] == "trace" + str(self._case)]["p"].values[0]
                 self.k = csv_data.loc[csv_data["trace"] == "trace" + str(self._case)]["k"].values[0]
             else:
                 myfile.close()
-                if not (hasattr(self, "p") or hasattr(self, "k")):
-                    fitted = self._fit(self._find_last_range())
-                    self.p = fitted[0]
-                    self.k = fitted[1]
-                    self.parameters_to_txt("p_k_results_all")
+            if not (hasattr(self, "p") or hasattr(self, "k")):
+                fitted = self._fit(self._find_last_range())
+                self.p = fitted[0]
+                self.k = fitted[1]
+                # self.p = 6
+                # self.k = 3.69180877e-04
+                # self.k = 0.2e-03
+                self.parameters_to_txt("p_k_results_all")
 
         L = find_contour_lengths(self._data, self.p, self.k)
         self._data["L"] = L
-        histo_data = decompose_histogram(self._data["L"])
-
-        # last = histo_data.loc[histo_data["means"] > 73]
-        #
-        # while len(last) > 1:
-
-
+        histo_data = decompose_histogram(self._data["L"], guess=self._peaks)
 
         return histo_data
 
@@ -54,19 +62,6 @@ class Experiment(Trajectory):
         fit_data = fit_data.reset_index(drop=True)
         fit_f = wlc(fit_data['d'], self.bond_length * (self.residues - 1), x[0], x[1])
         return np.linalg.norm(fit_f - fit_data['F'].to_numpy())
-
-    def _to_minimize2(self, x, last_range):
-        print(x)
-        fit_data = self._data[self._data['d'].between(last_range[0], last_range[1])]
-        fit_data = fit_data.reset_index(drop=True)
-        fit_f = wlc(fit_data['d'], self.l_prot, self._initial_guess_sep[0], self.k_prot) + wlc(fit_data['d'], x[2],
-                                                                                               x[1], 0.009)
-        return np.linalg.norm(fit_f - fit_data['F'].to_numpy())
-
-    def _fit2(self, last_range):
-        opt = minimize(self._to_minimize2, x0=self._initial_guess_sep, args=list(last_range), method='TNC',
-                       bounds=self._bounds_sep)
-        return opt['x']
 
     def _fit(self, last_range):
         opt = minimize(self._to_minimize, x0=self.initial_guess, args=list(last_range), method='TNC',
@@ -124,7 +119,6 @@ class Experiment(Trajectory):
 
             position.plot(d_space, y_fit, ls='--', linewidth=1, label=label, color=get_color(index))
             index += 1
-
 
         position.set_ylim(0, 45)
         position.set_xlim(min(self._data['d']), max(self._data['d']))
