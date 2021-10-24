@@ -4,13 +4,13 @@ from Tools import *
 
 class Theory(Trajectory):
 
-    def __init__(self, filename, case, **kwargs):
+    def __init__(self, filename, case, bond_length, residues, initial_guess, bounds, **kwargs):
 
-        bond_length = 0.38
+#         bond_length = 0.38
         # residues = 240 #trmd
-        residues = 188 #tm15
-        initial_guess = [4, 9.67e-05]
-        bounds = ((3, 5), (0.00001, 0.001))
+#         residues = 188 #tm15
+#         initial_guess = [4, 9.67e-05]
+#         bounds = ((3, 5), (0.00001, 0.001))
         
         # określ słownik z parametrami pików na histogramie CL
 
