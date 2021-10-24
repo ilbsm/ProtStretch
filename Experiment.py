@@ -6,16 +6,16 @@ from copy import deepcopy
 
 class Experiment(Trajectory):
 
-    def __init__(self, filename, case, **kwargs):
+    def __init__(self, filename, case, bond_length, residues, initial_guess, bounds, **kwargs):
 
-        bond_length = 0.365
-        residues = 226
+#         bond_length = 0.365
+#         residues = 226
         # residues = 1288
         # residues = 188-14
         # initial_guess = [5, 0]
         # bounds = ((4.8, 5.2), (0, 0))
-        initial_guess = [3, 0.001]
-        bounds = ((1, 5), (0.0001, 0.003))
+#         initial_guess = [3, 0.001]
+#         bounds = ((1, 5), (0.0001, 0.003))
         # initial_guess = [4, 0]
         # bounds = ((3, 7), (0, 0))
         # self._peaks = pd.DataFrame({'heights': [0.1, 0.1, 0.1, 0.1], 'means': [18, 27.5, 52, 67], 'widths': [1, 1, 1,
