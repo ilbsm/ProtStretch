@@ -1,0 +1,26 @@
+Jak przeprowadzić analizę dla nowego białka? 
+
+1. DANE Z SYMULACJI 
+
+a) Przygotuj dane w odpowiedni sposób (tak samo jak dane .fd, w tym nadaj ospowiednie nazwy kolumnom). Nadaj im nazwy "aa..." gdzie ... jest dwucyfrową liczą (01, 02 itd.)
+Jeżeli analizujesz również dane z relaksacji, do nazwy dodaj człon"_inverse" na końcu
+b) Wejdź do pliku Theory.py i ustaw parametry (residues, bond_length, initial_guess, bounds)
+c) Wejdź do Trajectory.py i w zmiennej DIRNAME zapisz ścieżkę do katalogu w którym są przechowywane dane
+d) Upewnij sie, że wszystkie ścieżki w plikach prowadzą do katalogu, w którym znajdują się dane. Uwaga! Trzymaj program w katalogu, w którym znajduje się folder z danymi. 
+e) Puść testowo main.py (odkomentuj odpowiednią część). Zobaczysz histogramy CL do których krzywe będą słabo dofitowane. Parametry pików oszacuj i wrzuć do 
+dataframe slf._peaks w Theory.py. Potrzebna jest informacja o wysokości, szerokości i polożeniu każdego piku. Popraw parametry fitowania do momentu, aż po 
+kolejnych działaniach programu fity będą wyglądać ok. 
+f) Nazwy osi oraz tytuły wykresów również trzeba by zmienić - wyszukaj w pikach słowa "plot"/"legend"/"xlabel"/"ylabel" i zmień je w każdym miejscu 
+
+2. DANE Z EKSPERYMENTU 
+
+a) Program działa dla formatu danych xls. Każda nieparzysta kolumna odpowiada wynikom z rociągania, a parzysta odpowiada relaksacji. 
+b) W main.py ustal wartości p_dna, l_dna, k_dna. Powinny być wiadome z ekspeymentu/literatury. Przy manewrowaniu fitami zmieniaj je tak, aby dopasowanie było jak 
+najlepsze. Oczywiście, odkomentuj odpowiedni fragment w main.py. 
+c) Podpunkt b) z 1. powtórz dla Experiment.py, tak samo podpunkt c) (tutaj znowu edytuj Trajectory.py)
+d) Powtórz podpunkty d, e, f z punktu 1. 
+
+3. DANE ZBIORCZE 
+
+Jeżeli wszystko zostało przygotowane jak w poprzednich puntach, to aby przeanalizować zbiorczo dane niewiele trzeba zmieniać. Odkomentuj odpowiedni fragment z 
+main.py i dodaj liczbę trajektorii, które chcesz analizować naraz (w przykładzie w main.py było to 21 trajektorii)
